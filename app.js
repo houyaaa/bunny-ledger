@@ -174,7 +174,9 @@
     var c = catOf(e.cat);
     return '<li class="entry">' +
       '<span class="ico" style="background:' + c.color + '">' + svgIcon(iconKey(c), 20) + '</span>' +
-      '<span class="name">' + esc(c.name) + '</span>' +
+      (e.memo
+        ? '<span class="name"><span class="memo">' + esc(e.memo) + '</span><span class="sub">' + esc(c.name) + '</span></span>'
+        : '<span class="name">' + esc(c.name) + '</span>') +
       '<span class="val">' + fmt(e.amount) + '원</span>' +
       (withDelete ? '<button type="button" class="del" data-del="' + e.id + '" aria-label="' + esc(c.name) + ' ' + fmt(e.amount) + '원 지우기">' + svgIcon('x', 18) + '</button>' : '') +
       '</li>';
@@ -186,6 +188,7 @@
     var d = parseYmd(date);
     $('sheetTitle').textContent = (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + DOW[d.getDay()] + '요일';
     $('amountInput').value = '';
+    $('memoInput').value = '';
     closeAddForm();
     if (!allCats().some(function (c) { return c.id === selCat; })) selCat = 'food';
     renderSheet();
@@ -236,7 +239,10 @@
   function saveEntry() {
     var amount = parseInt(($('amountInput').value || '').replace(/[^0-9]/g, ''), 10);
     if (!amount) { toast('금액을 적어주세요'); $('amountInput').focus(); return; }
-    entries.push({ id: 'e' + Date.now() + Math.random().toString(36).slice(2, 6), date: sheetDate, cat: selCat, amount: amount });
+    var memo = ($('memoInput').value || '').trim().slice(0, 40);
+    var entry = { id: 'e' + Date.now() + Math.random().toString(36).slice(2, 6), date: sheetDate, cat: selCat, amount: amount };
+    if (memo) entry.memo = memo;
+    entries.push(entry);
     store(KEY_LASTCAT, selCat);
     if (store(KEY_ENTRIES, entries)) toast(catOf(selCat).name + ' ' + fmt(amount) + '원 기록했어요');
     closeSheet();
@@ -387,7 +393,11 @@
         if (!data || !Array.isArray(data.entries)) throw new Error('bad');
         var clean = data.entries.filter(function (e) {
           return e && typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && typeof e.amount === 'number' && e.amount > 0 && typeof e.cat === 'string';
-        }).map(function (e, i) { return { id: String(e.id || ('i' + Date.now() + i)), date: e.date, cat: e.cat, amount: Math.round(e.amount) }; });
+        }).map(function (e, i) {
+          var o = { id: String(e.id || ('i' + Date.now() + i)), date: e.date, cat: e.cat, amount: Math.round(e.amount) };
+          if (typeof e.memo === 'string' && e.memo.trim()) o.memo = e.memo.trim().slice(0, 40);
+          return o;
+        });
         var cats = Array.isArray(data.customCats) ? data.customCats.filter(function (c) {
           return c && typeof c.id === 'string' && typeof c.name === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c.color);
         }).map(function (c) { return { id: c.id, name: c.name.slice(0, 5), color: c.color }; }) : [];
@@ -430,14 +440,15 @@
     var digits = this.value.replace(/[^0-9]/g, '').replace(/^0+/, '').slice(0, 10);
     this.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
   });
-  $('amountInput').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') saveEntry(); });
+  $('amountInput').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') $('memoInput').focus(); });
+  $('memoInput').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') saveEntry(); });
   $('saveBtn').addEventListener('click', saveEntry);
   $('sheetList').addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-del]');
     if (!b) return;
     var id = b.getAttribute('data-del');
     var e = entries.find(function (x) { return x.id === id; });
-    if (!e || !confirm(catOf(e.cat).name + ' ' + fmt(e.amount) + '원 기록을 지울까요?')) return;
+    if (!e || !confirm((e.memo || catOf(e.cat).name) + ' ' + fmt(e.amount) + '원 기록을 지울까요?')) return;
     entries = entries.filter(function (x) { return x.id !== id; });
     store(KEY_ENTRIES, entries);
     renderSheet(); renderHome();

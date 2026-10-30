@@ -167,6 +167,16 @@ button { cursor: pointer; }
 #amountInput:focus { outline: none; border-bottom-color: var(--ink); }
 #amountInput::placeholder { color: var(--soft); }
 .won-lg { font-size: 26px; }
+.memo-row { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+#memoInput {
+  border: none; border-bottom: 2px dashed var(--line);
+  background: transparent; padding: 4px 0; font-size: 16px;
+}
+#memoInput:focus { outline: none; border-bottom-color: var(--ink); }
+#memoInput::placeholder { color: var(--soft); }
+.entry .name { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.entry .name .memo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entry .name .sub { font-size: 12px; color: var(--muted); }
 
 .chip {
   display: inline-block;
