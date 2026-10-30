@@ -92,12 +92,82 @@
     return out;
   }
   var toastTimer;
-  function toast(msg) {
+  function toast(msg, actionLabel, action) {
     var t = $('toast');
-    t.textContent = msg;
+    t.innerHTML = '<span class="msg"></span>';
+    t.firstChild.textContent = msg;
+    t.classList.toggle('has-action', !!action);
+    if (action) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = actionLabel;
+      btn.addEventListener('click', function () { t.classList.remove('show'); action(); });
+      t.appendChild(btn);
+    }
     t.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1800);
+    toastTimer = setTimeout(function () { t.classList.remove('show', 'has-action'); }, action ? 4000 : 1800);
+  }
+
+  // 기록 지우기 (되돌리기 가능)
+  function removeEntry(id) {
+    var idx = -1;
+    for (var i = 0; i < entries.length; i++) if (entries[i].id === id) { idx = i; break; }
+    if (idx < 0) return;
+    var removed = entries.splice(idx, 1)[0];
+    store(KEY_ENTRIES, entries);
+    if (!$('sheetWrap').hidden) renderSheet();
+    renderHome();
+    toast((removed.memo || catOf(removed.cat).name) + ' ' + fmt(removed.amount) + '원을 지웠어요', '되돌리기', function () {
+      entries.splice(Math.min(idx, entries.length), 0, removed);
+      store(KEY_ENTRIES, entries);
+      if (!$('sheetWrap').hidden) renderSheet();
+      renderHome();
+    });
+  }
+
+  // 오른쪽 → 왼쪽으로 밀어서 지우기
+  var swipeJustHappened = false;
+  function enableSwipe(listEl) {
+    var row = null, li = null, sx = 0, sy = 0, dx = 0, mode = null, pid = null;
+    listEl.addEventListener('pointerdown', function (ev) {
+      var r = ev.target.closest('.entry-row');
+      if (!r || ev.target.closest('.del')) return;
+      row = r; li = r.parentNode; sx = ev.clientX; sy = ev.clientY; dx = 0; mode = null; pid = ev.pointerId;
+      row.classList.remove('snap');
+    });
+    listEl.addEventListener('pointermove', function (ev) {
+      if (!row || ev.pointerId !== pid) return;
+      var mx = ev.clientX - sx, my = ev.clientY - sy;
+      if (!mode) {
+        if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+        mode = Math.abs(mx) > Math.abs(my) ? 'h' : 'v';
+        if (mode === 'h') { try { row.setPointerCapture(pid); } catch (e) {} }
+      }
+      if (mode !== 'h') return;
+      dx = Math.min(0, mx);
+      row.style.transform = 'translateX(' + dx + 'px)';
+    });
+    function end() {
+      if (!row) return;
+      var r = row, l = li, w = r.offsetWidth;
+      if (mode === 'h') {
+        swipeJustHappened = true;
+        setTimeout(function () { swipeJustHappened = false; }, 50);
+      }
+      r.classList.add('snap');
+      if (mode === 'h' && dx < -Math.max(70, w * 0.35)) {
+        r.style.transform = 'translateX(-110%)';
+        l.style.height = l.offsetHeight + 'px';
+        setTimeout(function () { l.style.height = '0px'; l.style.opacity = '0'; }, 160);
+        setTimeout(function () { removeEntry(l.getAttribute('data-id')); }, 380);
+      } else {
+        r.style.transform = '';
+      }
+      row = null; li = null; mode = null;
+    }
+    listEl.addEventListener('pointerup', end);
+    listEl.addEventListener('pointercancel', end);
   }
 
   // ---------- 상태 ----------
@@ -172,14 +242,16 @@
 
   function entryRow(e, withDelete) {
     var c = catOf(e.cat);
-    return '<li class="entry">' +
+    return '<li class="entry" data-id="' + e.id + '">' +
+      '<div class="swipe-bg" aria-hidden="true">' + svgIcon('x', 16) + '지우기</div>' +
+      '<div class="entry-row">' +
       '<span class="ico" style="background:' + c.color + '">' + svgIcon(iconKey(c), 20) + '</span>' +
       (e.memo
         ? '<span class="name"><span class="memo">' + esc(e.memo) + '</span><span class="sub">' + esc(c.name) + '</span></span>'
         : '<span class="name">' + esc(c.name) + '</span>') +
       '<span class="val">' + fmt(e.amount) + '원</span>' +
-      (withDelete ? '<button type="button" class="del" data-del="' + e.id + '" aria-label="' + esc(c.name) + ' ' + fmt(e.amount) + '원 지우기">' + svgIcon('x', 18) + '</button>' : '') +
-      '</li>';
+      (withDelete ? '<button type="button" class="del" data-del="' + e.id + '" aria-label="' + esc(e.memo || c.name) + ' ' + fmt(e.amount) + '원 지우기">' + svgIcon('x', 18) + '</button>' : '') +
+      '</div></li>';
   }
 
   // ---------- 기록 시트 ----------
@@ -415,7 +487,9 @@
     var b = ev.target.closest('[data-date]');
     if (b) openSheet(b.getAttribute('data-date'));
   });
-  $('todayList').addEventListener('click', function () { openSheet(todayStr()); });
+  $('todayList').addEventListener('click', function () { if (!swipeJustHappened) openSheet(todayStr()); });
+  enableSwipe($('todayList'));
+  enableSwipe($('sheetList'));
   $('prevMonth').addEventListener('click', function () { view.m--; if (view.m < 0) { view.m = 11; view.y--; } renderHome(); });
   $('nextMonth').addEventListener('click', function () { view.m++; if (view.m > 11) { view.m = 0; view.y++; } renderHome(); });
   $('monthLabel').addEventListener('click', function () { var t = new Date(); view = { y: t.getFullYear(), m: t.getMonth() }; renderHome(); });
@@ -446,12 +520,7 @@
   $('sheetList').addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-del]');
     if (!b) return;
-    var id = b.getAttribute('data-del');
-    var e = entries.find(function (x) { return x.id === id; });
-    if (!e || !confirm((e.memo || catOf(e.cat).name) + ' ' + fmt(e.amount) + '원 기록을 지울까요?')) return;
-    entries = entries.filter(function (x) { return x.id !== id; });
-    store(KEY_ENTRIES, entries);
-    renderSheet(); renderHome();
+    removeEntry(b.getAttribute('data-del'));
   });
 
   // 카테고리 선택 / 추가 / 길게 눌러 삭제
