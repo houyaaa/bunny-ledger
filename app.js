@@ -255,12 +255,37 @@
   }
 
   // ---------- 기록 시트 ----------
-  function openSheet(date) {
-    sheetDate = date;
+  var editingId = null;
+  function dateLabel(date) {
     var d = parseYmd(date);
-    $('sheetTitle').textContent = (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + DOW[d.getDay()] + '요일';
+    return (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + DOW[d.getDay()] + '요일';
+  }
+  function resetForm() {
+    editingId = null;
     $('amountInput').value = '';
     $('memoInput').value = '';
+    $('dateInput').value = sheetDate;
+    $('editBar').hidden = true;
+    $('saveBtn').textContent = '기록하기';
+  }
+  function startEdit(id) {
+    var e = entries.find(function (x) { return x.id === id; });
+    if (!e) return;
+    editingId = id;
+    $('amountInput').value = fmt(e.amount);
+    $('memoInput').value = e.memo || '';
+    $('dateInput').value = e.date;
+    selCat = allCats().some(function (c) { return c.id === e.cat; }) ? e.cat : 'etc';
+    $('editBar').hidden = false;
+    $('saveBtn').textContent = '수정하기';
+    closeAddForm();
+    renderSheet();
+    $('editBar').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  function openSheet(date) {
+    sheetDate = date;
+    $('sheetTitle').textContent = dateLabel(date);
+    resetForm();
     closeAddForm();
     if (!allCats().some(function (c) { return c.id === selCat; })) selCat = 'food';
     renderSheet();
@@ -276,8 +301,14 @@
   }
   function renderSheet() {
     var list = entries.filter(function (e) { return e.date === sheetDate; });
+    if (editingId && !entries.some(function (e) { return e.id === editingId; })) resetForm();
     $('sheetList').innerHTML = list.map(function (e) { return entryRow(e, true); }).join('');
+    if (editingId) {
+      var row = $('sheetList').querySelector('[data-id="' + editingId + '"]');
+      if (row) row.classList.add('editing');
+    }
     $('sheetList').hidden = !list.length;
+    $('sheetHint').hidden = !list.length;
     var c = catOf(selCat);
     $('selChip').textContent = c.name;
     $('selChip').style.background = c.color;
@@ -312,11 +343,27 @@
     var amount = parseInt(($('amountInput').value || '').replace(/[^0-9]/g, ''), 10);
     if (!amount) { toast('금액을 적어주세요'); $('amountInput').focus(); return; }
     var memo = ($('memoInput').value || '').trim().slice(0, 40);
-    var entry = { id: 'e' + Date.now() + Math.random().toString(36).slice(2, 6), date: sheetDate, cat: selCat, amount: amount };
+    var date = $('dateInput').value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast('날짜를 골라주세요'); $('dateInput').focus(); return; }
+    var d = parseYmd(date);
+    var short = (d.getMonth() + 1) + '월 ' + d.getDate() + '일';
+
+    if (editingId) {
+      var e = entries.find(function (x) { return x.id === editingId; });
+      if (!e) { resetForm(); return; }
+      var moved = e.date !== date;
+      e.date = date; e.cat = selCat; e.amount = amount;
+      if (memo) e.memo = memo; else delete e.memo;
+      if (store(KEY_ENTRIES, entries)) toast(moved ? "'" + (memo || catOf(selCat).name) + "' 기록을 " + short + '로 옮겼어요' : '기록을 고쳤어요');
+      closeSheet();
+      return;
+    }
+
+    var entry = { id: 'e' + Date.now() + Math.random().toString(36).slice(2, 6), date: date, cat: selCat, amount: amount };
     if (memo) entry.memo = memo;
     entries.push(entry);
     store(KEY_LASTCAT, selCat);
-    if (store(KEY_ENTRIES, entries)) toast(catOf(selCat).name + ' ' + fmt(amount) + '원 기록했어요');
+    if (store(KEY_ENTRIES, entries)) toast((date !== sheetDate ? short + ' ' : '') + catOf(selCat).name + ' ' + fmt(amount) + '원 기록했어요');
     closeSheet();
   }
 
@@ -519,9 +566,15 @@
   $('saveBtn').addEventListener('click', saveEntry);
   $('sheetList').addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-del]');
-    if (!b) return;
-    removeEntry(b.getAttribute('data-del'));
+    if (b) { removeEntry(b.getAttribute('data-del')); return; }
+    if (swipeJustHappened) return;
+    var li = ev.target.closest('[data-id]');
+    if (!li) return;
+    var id = li.getAttribute('data-id');
+    if (id === editingId) { resetForm(); renderSheet(); } else startEdit(id);
   });
+  $('cancelEdit').addEventListener('click', function () { resetForm(); renderSheet(); });
+  $('dateInput').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') saveEntry(); });
 
   // 카테고리 선택 / 추가 / 길게 눌러 삭제
   var pressTimer = null, longPressed = false;

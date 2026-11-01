@@ -190,6 +190,25 @@ button { cursor: pointer; }
 }
 #memoInput:focus { outline: none; border-bottom-color: var(--ink); }
 #memoInput::placeholder { color: var(--soft); }
+#dateInput {
+  display: block; width: 100%; min-height: 36px;
+  border: none; border-bottom: 2px dashed var(--line); border-radius: 0;
+  background: transparent; padding: 4px 0; font-size: 16px; text-align: left;
+  -webkit-appearance: none; appearance: none;
+}
+#dateInput:focus { outline: none; border-bottom-color: var(--ink); }
+#dateInput::-webkit-date-and-time-value { text-align: left; }
+.edit-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px 6px 12px;
+  background: var(--lav);
+  border: 2px solid var(--ink);
+  border-radius: 16px 12px 18px 10px / 12px 18px 10px 16px;
+  font-size: 14px; font-weight: 600;
+}
+.btn-ghost.small-btn { height: 34px; padding: 0 12px; font-size: 13px; background: var(--card); }
+.entry.editing .entry-row { background: #EEE8FB; }
+#sheetList .entry-row { cursor: pointer; }
 .entry .name { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 .entry .name .memo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entry .name .sub { font-size: 12px; color: var(--muted); }

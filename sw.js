@@ -1,5 +1,5 @@
 // 오프라인에서도 열리도록: 먼저 네트워크, 안 되면 저장해둔 파일
-var CACHE = 'nakseo-v3';
+var CACHE = 'nakseo-v4';
 var SHELL = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest',
   'img/bunny-face.png', 'img/bunny-coin.png', 'img/bunny-lying.png', 'img/bunny-paper.png',
   'icons/icon-192.png', 'icons/apple-touch-icon.png'];
